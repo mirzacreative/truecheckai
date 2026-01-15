@@ -51,7 +51,7 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900">
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-white mb-4">TrueCheckAI</h1>
+          <h1 className="text-5xl font-bold text-white mb-4">TrueCheck</h1>
           <p className="text-xl text-indigo-200">AI-Powered Media Verification</p>
           <p className="text-gray-400 mt-2">Detect deepfakes and AI-generated content</p>
         </header>
@@ -160,7 +160,7 @@ export default function App() {
         </div>
 
         <footer className="mt-16 text-center text-gray-500">
-          <p>© 2026 TrueCheckAI. Powered by 8 Hugging Face AI Models.</p>
+          <p>© 2026 TrueCheck. Powered by 8 Hugging Face AI Models.</p>
         </footer>
       </div>
     </div>
