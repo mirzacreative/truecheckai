@@ -23,27 +23,57 @@ export default function App() {
     setFile(selectedFile);
     setPreview(URL.createObjectURL(selectedFile));
     setResult(null);
+    setShowUpload(true);
   };
 
   const analyzeMedia = async () => {
     if (!file) return;
     setAnalyzing(true);
-    
     try {
       const reader = new FileReader();
-      reader.readAsDataURL(file);
+      reader.readAsArrayBuffer(file);
       reader.onloadend = async () => {
-        const base64 = reader.result;
-        const type = file.type.startsWith('video') ? 'video' : 'image';
+        const blob = new Blob([reader.result], { type: file.type });
         
-        const response = await fetch('/.netlify/functions/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ media: base64, type })
-        });
+        // Call Hugging Face API directly
+        const response = await fetch(
+          'https://api-inference.huggingface.co/models/dima806/deepfake_vs_real_image_detection',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: blob
+          }
+        );
+
+        const apiResult = await response.json();
+        console.log('API Response:', apiResult);
+
+        // Process the result
+        if (apiResult && Array.isArray(apiResult) && apiResult.length > 0) {
+          // Find the label with highest score
+          const sortedResults = apiResult.sort((a, b) => b.score - a.score);
+          const topResult = sortedResults[0];
+          
+          const isAI = topResult.label.toLowerCase().includes('fake') || 
+                      topResult.label.toLowerCase().includes('ai');
+          
+          const confidence = Math.round(topResult.score * 100);
+          
+          setResult({
+            isAI: isAI,
+            confidence: confidence,
+            details: {
+              model: 'Hugging Face Deepfake Detector',
+              classification: topResult.label,
+              allScores: sortedResults
+            }
+          });
+        } else {
+          throw new Error('Invalid API response');
+        }
         
-        const data = await response.json();
-        setResult(data);
         setAnalyzing(false);
       };
     } catch (error) {
@@ -55,214 +85,145 @@ export default function App() {
 
   if (!showUpload) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900">
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-cyan-500">
         <div className="container mx-auto px-4 py-8">
-          <header className="text-center mb-12">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <svg className="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              <h1 className="text-5xl font-bold text-white">TrueCheck</h1>
-            </div>
-            <p className="text-2xl text-indigo-200 font-semibold">AI-Powered Media Verification</p>
-            <p className="text-gray-400 mt-2">Detect deepfakes and AI-generated content with advanced machine learning</p>
-          </header>
-
-          <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-6 mb-12">
-            <div className="bg-slate-800/50 backdrop-blur p-6 rounded-xl border border-indigo-500/20 hover:border-indigo-500/50 transition">
-              <div className="text-4xl mb-4">🧠</div>
-              <h3 className="text-xl font-bold text-white mb-2">Deep Learning</h3>
-              <p className="text-gray-400">Utilizes Convolutional Neural Networks (CNNs) trained on millions of fake and real images.</p>
-            </div>
-            
-            <div className="bg-slate-800/50 backdrop-blur p-6 rounded-xl border border-indigo-500/20 hover:border-indigo-500/50 transition">
-              <div className="text-4xl mb-4">🔍</div>
-              <h3 className="text-xl font-bold text-white mb-2">Metadata Extraction</h3>
-              <p className="text-gray-400">Parses EXIF, XMP, and IPTC data to verify device fingerprints and timestamps.</p>
-            </div>
-            
-            <div className="bg-slate-800/50 backdrop-blur p-6 rounded-xl border border-indigo-500/20 hover:border-indigo-500/50 transition">
-              <div className="text-4xl mb-4">🔒</div>
-              <h3 className="text-xl font-bold text-white mb-2">Privacy First</h3>
-              <p className="text-gray-400">Files are processed securely. We calculate hashes and do not store your personal media.</p>
-            </div>
+          <div className="text-center mb-12">
+            <h1 className="text-5xl font-bold text-white mb-4">🛡️ TrueCheck AI</h1>
+            <p className="text-xl text-white/90">AI-Powered Media Verification Platform</p>
+            <p className="text-lg text-white/80 mt-2">Detect Deepfakes & AI-Generated Content</p>
           </div>
 
-          <div className="text-center">
-            <button
-              onClick={() => setShowUpload(true)}
-              className="px-12 py-4 bg-indigo-600 text-white text-lg font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg hover:shadow-indigo-500/50"
+          <div className="max-w-2xl mx-auto">
+            <div
+              className={`border-4 border-dashed rounded-2xl p-12 text-center transition-all ${
+                dragOver ? 'border-white bg-white/20' : 'border-white/50 bg-white/10'
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
             >
-              Start Analysis →
-            </button>
-          </div>
+              <div className="text-6xl mb-4">📁</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Upload Media to Analyze</h2>
+              <p className="text-white/80 mb-6">Drag & drop or click to select</p>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                onChange={(e) => e.target.files[0] && handleFile(e.target.files[0])}
+                className="hidden"
+                id="fileInput"
+              />
+              <label
+                htmlFor="fileInput"
+                className="inline-block px-8 py-4 bg-white text-purple-600 font-bold rounded-xl cursor-pointer hover:bg-purple-50 transition-all"
+              >
+                Select File
+              </label>
+            </div>
 
-          <div className="mt-16 bg-slate-800/30 backdrop-blur rounded-xl p-8 max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-white mb-6 text-center">Latest Insights</h2>
-            <div className="space-y-4">
-              <div className="bg-slate-700/50 p-4 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">📊</span>
-                  <div>
-                    <h4 className="text-white font-semibold">8 AI Models Working Together</h4>
-                    <p className="text-gray-400 text-sm">Combined analysis from multiple deepfake detection systems</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-slate-700/50 p-4 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">⚡</span>
-                  <div>
-                    <h4 className="text-white font-semibold">Fast Processing</h4>
-                    <p className="text-gray-400 text-sm">Get results in seconds with our optimized pipeline</p>
-                  </div>
-                </div>
-              </div>
+            <div className="mt-8 p-6 bg-white/10 backdrop-blur-lg rounded-xl text-white">
+              <h3 className="text-xl font-bold mb-4">✨ Features</h3>
+              <ul className="space-y-2">
+                <li>✅ Real-time AI Detection using Hugging Face models</li>
+                <li>✅ Deepfake & Synthetic Image Detection</li>
+                <li>✅ Confidence Score Analysis</li>
+                <li>✅ Free & Open Source</li>
+              </ul>
             </div>
           </div>
-
-          <footer className="mt-16 text-center text-gray-500">
-            <p>© 2026 TrueCheck. Powered by 8 Hugging Face AI Models.</p>
-          </footer>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-cyan-500">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-6">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">🛡️ TrueCheck AI</h1>
           <button
             onClick={() => { setShowUpload(false); setFile(null); setPreview(null); setResult(null); }}
-            className="text-indigo-400 hover:text-indigo-300 transition"
+            className="text-white/80 hover:text-white"
           >
-            ← Back to Home
+            ← Upload New File
           </button>
         </div>
-        
-        <header className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-white mb-4">TrueCheck</h1>
-          <p className="text-xl text-indigo-200">AI-Powered Media Verification</p>
-          <p className="text-gray-400 mt-2">Detect deepfakes and AI-generated content</p>
-        </header>
 
         <div className="max-w-4xl mx-auto">
-          <div 
-            className={`border-4 border-dashed rounded-xl p-12 text-center transition-all ${
-              dragOver ? 'border-indigo-400 bg-indigo-900/20' : 'border-indigo-600 bg-slate-800/50'
-            }`}
-            onDrop={handleDrop}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-          >
-            {!preview ? (
-              <>
-                <div className="text-6xl mb-4">📤</div>
-                <h3 className="text-2xl font-semibold text-white mb-4">
-                  Upload Image or Video
-                </h3>
-                <p className="text-gray-400 mb-6">Drag and drop or click to browse</p>
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  onChange={(e) => e.target.files[0] && handleFile(e.target.files[0])}
-                  className="hidden"
-                  id="fileInput"
+          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+            {preview && (
+              <div className="p-6 bg-gray-50">
+                <img
+                  src={preview}
+                  alt="Preview"
+                  className="max-w-full max-h-96 mx-auto rounded-lg shadow-lg"
                 />
-                <label
-                  htmlFor="fileInput"
-                  className="inline-block px-8 py-3 bg-indigo-600 text-white rounded-lg cursor-pointer hover:bg-indigo-700 transition"
-                >
-                  Select File
-                </label>
-                <p className="text-sm text-gray-500 mt-4">Max file size: 4MB</p>
-              </>
-            ) : (
-              <div className="space-y-6">
-                {file?.type.startsWith('image') ? (
-                  <img src={preview} alt="Preview" className="max-h-96 mx-auto rounded-lg" />
-                ) : (
-                  <video src={preview} controls className="max-h-96 mx-auto rounded-lg" />
-                )}
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={analyzeMedia}
-                    disabled={analyzing}
-                    className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                  >
-                    {analyzing ? 'Analyzing...' : 'Analyze Media'}
-                  </button>
-                  <button
-                    onClick={() => { setFile(null); setPreview(null); setResult(null); }}
-                    className="px-8 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition"
-                  >
-                    Clear
-                  </button>
-                </div>
               </div>
             )}
-          </div>
 
-          {analyzing && (
-            <div className="mt-8 bg-slate-800/50 rounded-xl p-8 text-center">
-              <div className="animate-pulse text-white text-lg mb-4">Analyzing with AI models...</div>
-              <div className="w-full bg-slate-700 rounded-full h-2">
-                <div className="bg-indigo-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
-              </div>
-            </div>
-          )}
+            <div className="p-8">
+              {!result && !analyzing && (
+                <button
+                  onClick={analyzeMedia}
+                  className="w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-xl hover:shadow-lg transition-all"
+                >
+                  🔍 Start Analysis
+                </button>
+              )}
 
-          {result && !analyzing && (
-            <div className="mt-8 bg-slate-800/50 rounded-xl p-8">
-              <h3 className="text-2xl font-bold text-white mb-6">Analysis Results</h3>
-              <div className={`p-6 rounded-lg ${result.verdict === 'real' ? 'bg-green-900/30 border-2 border-green-500' : 'bg-red-900/30 border-2 border-red-500'}`}>
-                <div className="text-center mb-4">
-                  <span className="text-5xl">{result.verdict === 'real' ? '✓' : '⚠'}</span>
-                  <h4 className="text-3xl font-bold text-white mt-4">
-                    {result.verdict === 'real' ? 'Authentic Media' : 'AI-Generated Content'}
-                  </h4>
-                  <p className="text-gray-300 mt-2">
-                    {result.verdict === 'real' ? 'This appears to be genuine content' : 'This appears to be synthetically generated'}
-                  </p>
+              {analyzing && (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-purple-600 mb-4"></div>
+                  <p className="text-xl font-bold text-gray-700">Analyzing with AI...</p>
+                  <p className="text-gray-500 mt-2">Using Hugging Face detection models</p>
                 </div>
+              )}
 
-                {result.score && (
-                  <div className="text-center mb-4">
-                    <p className="text-gray-300">Confidence: {result.score}%</p>
+              {result && (
+                <div className="space-y-6">
+                  <div
+                    className={`p-6 rounded-xl text-center ${
+                      result.isAI ? 'bg-red-50 border-2 border-red-300' : 'bg-green-50 border-2 border-green-300'
+                    }`}
+                  >
+                    <div className="text-5xl mb-3">{result.isAI ? '⚠️' : '✅'}</div>
+                    <h2 className="text-3xl font-bold mb-2">
+                      {result.isAI ? 'AI-Generated' : 'Likely Real'}
+                    </h2>
+                    <p className="text-lg text-gray-600">
+                      Confidence: <span className="font-bold">{result.confidence}%</span>
+                    </p>
                   </div>
-                )}
 
-                {result.platform && (
-                  <div className="mt-4 text-center">
-                    <p className="text-yellow-400">Possible Generation Platform: {result.platform}</p>
-                  </div>
-                )}
-
-                {result.details && (
-                  <div className="mt-6 bg-slate-900/50 p-4 rounded-lg">
-                    <h5 className="text-lg font-semibold text-white mb-2">Verification Details:</h5>
-                    <div className="space-y-1 text-gray-300">
-                      <p>• Device: {result.details.device}</p>
-                      <p>• Authenticity: {result.details.authenticity}</p>
-                      <p>• Analysis Date: {result.details.date}</p>
+                  <div className="bg-gray-50 p-6 rounded-xl">
+                    <h3 className="text-xl font-bold mb-4">📊 Analysis Details</h3>
+                    <div className="space-y-2 text-gray-700">
+                      <p><strong>Model:</strong> {result.details.model}</p>
+                      <p><strong>Classification:</strong> {result.details.classification}</p>
+                      <div className="mt-4">
+                        <p className="font-bold mb-2">All Predictions:</p>
+                        <div className="space-y-1">
+                          {result.details.allScores.map((item, idx) => (
+                            <div key={idx} className="flex justify-between">
+                              <span>{item.label}:</span>
+                              <span className="font-bold">{Math.round(item.score * 100)}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                )}
 
-                {result.model_used && (
-                  <div className="mt-4 text-center text-sm text-gray-400">
-                    Analyzed by: {result.model_used}
-                  </div>
-                )}
-              </div>
+                  <button
+                    onClick={() => { setFile(null); setPreview(null); setResult(null); setShowUpload(false); }}
+                    className="w-full py-4 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-all"
+                  >
+                    Upload Another File
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-
-        <footer className="mt-16 text-center text-gray-500">
-          <p>© 2026 TrueCheck. Powered by 8 Hugging Face AI Models.</p>
-        </footer>
       </div>
     </div>
   );
