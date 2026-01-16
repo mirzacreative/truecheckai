@@ -37,8 +37,7 @@ export default function App() {
         
         // Call Hugging Face API directly
         const response = await fetch(
-          'https://api-inference.huggingface.co/models/dima806/deepfake_vs_real_image_detection',
-          {
+          'https://api-inference.huggingface.co/models/Ateeqq/ai-vs-human-image-detector',          {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
