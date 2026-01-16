@@ -111,20 +111,39 @@ exports.handler = async (event, context) => {
     const highConfidenceAI = results.filter(r => r.verdict === 'ai' && r.highConfidence).length;
     const highConfidenceReal = results.filter(r => r.verdict === 'real' && r.highConfidence).length;
 
-    // IMPROVED MAJORITY RULE:
-    // If majority says AI with at least one high confidence, mark as AI
-    // If majority says Real, mark as Real (default to Real for tie)
-    // Prefer high confidence results
-    let finalVerdict = 'real'; // Default to real
+        // ULTRA-CONSERVATIVE MAJORITY RULE:
+    // Only mark as AI if we have OVERWHELMING evidence
+    // This reduces false positives for real photos
+    // Default to 'real' unless we have very strong proof it's fake
+    let finalVerdict = 'real'; // Always default to real
     
-    if (highConfidenceAI > 0 && aiVotes > realVotes) {
-      finalVerdict = 'ai';
-    } else if (aiVotes > realVotes && aiVotes >= 2) {
-      // At least 2 models agree it's AI
-      finalVerdict = 'ai';
-    } else if (highConfidenceReal > highConfidenceAI) {
-      finalVerdict = 'real';
+    // STRICT requirements for AI classification:
+    // 1. ALL 3 models must say AI (unanimous), OR
+    // 2. At least 2 models say AI with HIGH confidence (>80%), OR  
+    // 3. If we only have 1-2 model responses, need 100% agreement + high confidence
+    
+    if (results.length >= 3) {
+      // We have 3 models - need unanimous or strong majority with high confidence
+      if (aiVotes === 3) {
+        // All 3 say AI - mark as AI
+        finalVerdict = 'ai';
+      } else if (aiVotes >= 2 && highConfidenceAI >= 2) {
+        // At least 2 models with high confidence say AI
+        finalVerdict = 'ai';
+      }
+    } else if (results.length === 2) {
+      // Only 2 models - need both to agree it's AI with high confidence
+      if (aiVotes === 2 && highConfidenceAI >= 2) {
+        finalVerdict = 'ai';
+      }
+    } else if (results.length === 1) {
+      // Only 1 model - need high confidence AND score > 90%
+      const singleResult = results[0];
+      if (singleResult.verdict === 'ai' && singleResult.confidence > 90) {
+        finalVerdict = 'ai';
+      }
     }
+    // If none of the above strict conditions are met, finalVerdict stays 'real'}
 
     const avgConfidence = Math.round(
       results.reduce((sum, r) => sum + r.confidence, 0) / results.length
