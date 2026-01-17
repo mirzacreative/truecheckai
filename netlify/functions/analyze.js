@@ -40,7 +40,7 @@ exports.handler = async (event, context) => {
     const imageBuffer = buffer;
 
     // Hugging Face model - uses FREE Inference API
-    const MODEL_URL = 'https://api-inference.huggingface.co/models/prithivMLmods/Deep-Fake-Detector-v2-Model';
+    const MODEL_URL = 'https://api-inference.huggingface.co/models/umm-maybe/AI-image-detector';
     
     // Call Hugging Face API (FREE - no API key needed for public models)
     const response = await fetch(MODEL_URL, {
